@@ -705,6 +705,16 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_INFO, "update_edge created  %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                dec_ip_bit_str_t ip_bit_str = {'\0'};
+                traceEvent(TRACE_INFO, "happyn edge created: community:%s, edge_mac:%s, "
+                           "edge_addr:%s, edge_name:%s",
+                           comm->community,
+                           (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                                                              ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                           scan->dev_desc);
+
             }
             ret = update_edge_new_sn;
         } else {
@@ -722,6 +732,16 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_INFO, "update_edge updated  %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                dec_ip_bit_str_t ip_bit_str = {'\0'};
+                traceEvent(TRACE_INFO, "happyn edge updated: community:%s, edge_mac:%s, "
+                           "edge_addr:%s, edge_name:%s",
+                           comm->community,
+                           (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                                                              ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                           scan->dev_desc);
+
                 ret = update_edge_sock_change;
             } else {
                 memcpy(&(scan->last_cookie), reg->cookie, sizeof(N2N_COOKIE_SIZE));
