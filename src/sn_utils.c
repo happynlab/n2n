@@ -710,8 +710,8 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_INFO, "happyn edge created: community:%s, edge_mac:%s, "
                            "edge_addr:%s, edge_name:%s",
                            comm->community,
-                           (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
-                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                           (is_null_mac(scan->mac_addr)) ? "UNKNOWN" : macaddr_str(mac_buf, reg->edgeMac),
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "UNKNOWN") :
                                                               ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
                            scan->dev_desc);
 
