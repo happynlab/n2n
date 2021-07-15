@@ -708,12 +708,12 @@ static int update_edge (n2n_sn_t *sss,
 
                 dec_ip_bit_str_t ip_bit_str = {'\0'};
                 traceEvent(TRACE_INFO, "happyn edge created: community:%s, edge_mac:%s, "
-                           "edge_addr:%s, edge_name:%s",
+                           "edge_addr:%s, edge_name:%s, ts:%d",
                            comm->community,
                            (is_null_mac(scan->mac_addr)) ? "UNKNOWN" : macaddr_str(mac_buf, reg->edgeMac),
                            (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "UNKNOWN") :
                                                               ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
-                           scan->dev_desc);
+                           scan->dev_desc, now);
 
             }
             ret = update_edge_new_sn;
@@ -723,6 +723,7 @@ static int update_edge (n2n_sn_t *sss,
         }
     } else {
         /* Known */
+        dec_ip_bit_str_t ip_bit_str = {'\0'};
         if(auth_edge(&(scan->auth), &(reg->auth), answer_auth, comm) == 0) {
             if(!sock_equal(sender_sock, &(scan->sock))) {
                 memcpy(&(scan->sock), sender_sock, sizeof(n2n_sock_t));
@@ -733,14 +734,13 @@ static int update_edge (n2n_sn_t *sss,
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
 
-                dec_ip_bit_str_t ip_bit_str = {'\0'};
                 traceEvent(TRACE_INFO, "happyn edge updated: community:%s, edge_mac:%s, "
-                           "edge_addr:%s, edge_name:%s",
+                           "edge_addr:%s, edge_name:%s, ts:%d",
                            comm->community,
                            (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
                            (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
                                                               ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
-                           scan->dev_desc);
+                           scan->dev_desc, now);
 
                 ret = update_edge_sock_change;
             } else {
@@ -749,6 +749,19 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_DEBUG, "update_edge unchanged %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                /* for edge client status monitor:default 10 * 20 =200s */
+                static uint64_t log_interval = 10;
+                if ((now - scan->last_seen) % 10 == 0 && log_interval++ % 10 == 0) {
+                    traceEvent(TRACE_INFO, "happyn edge unchanged: community:%s, edge_mac:%s, "
+                               "edge_addr:%s, edge_name:%s, ts:%d",
+                               comm->community,
+                               (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
+                               (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                                                                  ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                               scan->dev_desc, now);
+                }
+
 
                 ret = update_edge_no_change;
             }
