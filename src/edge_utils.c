@@ -1141,6 +1141,7 @@ void send_query_peer (n2n_edge_t * eee,
 void send_register_super (n2n_edge_t *eee) {
 
     uint8_t pktbuf[N2N_PKT_BUF_SIZE] = {0};
+    uint8_t hash_buf[16] = {0};
     size_t idx;
     /* ssize_t sent; */
     n2n_common_t cmn;
@@ -1172,10 +1173,17 @@ void send_register_super (n2n_edge_t *eee) {
     traceEvent(TRACE_DEBUG, "send REGISTER_SUPER to %s",
                sock_to_cstr(sockbuf, &(eee->curr_sn->sock)));
 
-    if(eee->conf.header_encryption == HEADER_ENCRYPTION_ENABLED)
+    if(eee->conf.header_encryption == HEADER_ENCRYPTION_ENABLED) {
         packet_header_encrypt(pktbuf, idx, idx,
                               eee->conf.header_encryption_ctx_static, eee->conf.header_iv_ctx_static,
                               time_stamp());
+
+        if(eee->conf.shared_secret) {
+            pearson_hash_128(hash_buf, pktbuf, idx);
+            speck_128_encrypt(hash_buf, (speck_context_t*)eee->conf.shared_secret_ctx);
+            encode_buf(pktbuf, &idx, hash_buf, N2N_REG_SUP_HASH_CHECK_LEN);
+        }
+    }
 
     /* sent = */ sendto_sock(eee, pktbuf, idx, &(eee->curr_sn->sock));
 }
@@ -1225,7 +1233,7 @@ static int sort_supernodes (n2n_edge_t *eee, time_t now) {
     if(now - eee->last_sweep > SWEEP_TIME) {
         // this routine gets periodically called
 
-        if(eee->sn_wait == 0) {
+        if(!eee->sn_wait) {
             // sort supernodes in ascending order of their selection_criterion fields
             sn_selection_sort(&(eee->conf.supernodes));
         }
@@ -1241,6 +1249,7 @@ static int sort_supernodes (n2n_edge_t *eee, time_t now) {
                        supernode_ip(eee), HASH_COUNT(eee->conf.supernodes), (unsigned int)eee->sup_attempts);
 
             send_register_super(eee);
+            eee->last_register_req = now;
             eee->sn_wait = 1;
         }
 
@@ -1416,12 +1425,22 @@ void update_supernode_reg (n2n_edge_t * eee, time_t now) {
 
     struct peer_info *peer, *tmp_peer;
     int cnt = 0;
+    int off = 0;
 
-    if(eee->sn_wait && (now > (eee->last_register_req + (eee->conf.register_interval/10)))) {
+    if((eee->sn_wait && (now > (eee->last_register_req + (eee->conf.register_interval / 10))))
+     ||(eee->sn_wait == 2)) /* immediately re-register in case of RE_REGISTER_SUPER */ {
         /* fall through */
         traceEvent(TRACE_DEBUG, "update_supernode_reg: doing fast retry.");
     } else if(now < (eee->last_register_req + eee->conf.register_interval))
         return; /* Too early */
+
+    // determine time offset to apply on last_register_req for
+    // all edges's next re-registration does not happen all at once
+    if (eee->sn_wait == 2) {
+        // remaining 1/4 is greater than 1/10 fast retry allowance;
+        // '%' might be expensive but does not happen all too often
+        off = n2n_rand() % ((eee->conf.register_interval * 3) / 4);
+    }
 
     check_join_multicast_group(eee);
 
@@ -1482,14 +1501,14 @@ void update_supernode_reg (n2n_edge_t * eee, time_t now) {
 
     // if supernode repeatedly not responding (already waiting), safeguard the
     // current known connections to peers by re-registering
-    if(eee->sn_wait)
+    if(eee->sn_wait == 1)
         HASH_ITER(hh, eee->known_peers, peer, tmp_peer)
             if((now - peer->last_seen) > REGISTER_SUPER_INTERVAL_DFL)
                 send_register(eee, &(peer->sock), peer->mac_addr);
 
     eee->sn_wait = 1;
 
-    eee->last_register_req = now;
+    eee->last_register_req = now - off;
 }
 
 /* ************************************** */
@@ -2259,6 +2278,7 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
     n2n_sock_str_t        sockbuf2; /* don't clobber sockbuf1 if writing two addresses to trace */
     macstr_t              mac_buf1;
     macstr_t              mac_buf2;
+    uint8_t               hash_buf[16];
     size_t                rem;
     size_t                idx;
     size_t                msg_type;
@@ -2295,16 +2315,23 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
 
     if(eee->conf.header_encryption == HEADER_ENCRYPTION_ENABLED) {
         // match with static (1) or dynamic (2) ctx?
-        header_enc = packet_header_decrypt(udp_buf, udp_size,
-                                           (char *)eee->conf.community_name,
-                                           eee->conf.header_encryption_ctx_static, eee->conf.header_iv_ctx_static,
-                                           &stamp);
-        if(!header_enc)
-            if(packet_header_decrypt(udp_buf, udp_size,
+        // check dynamic first as it is identical to static in normal header encryption mode
+        if(packet_header_decrypt(udp_buf, udp_size,
                                      (char *)eee->conf.community_name,
                                      eee->conf.header_encryption_ctx_dynamic, eee->conf.header_iv_ctx_dynamic,
                                      &stamp)) {
-                header_enc = 2;
+                header_enc = 2; /* not accurate with normal header encryption but does not matter */
+        }
+        if(!header_enc) {
+            // check static now (very likely to be REGISTER_SUPER_ACK, REGISTER_SUPER_NAK or invalid)
+            if(eee->conf.shared_secret) {
+                // hash the still encrypted packet to eventually be able to check it later (required for REGISTER_SUPER_ACK with user/pw auth)
+                pearson_hash_128(hash_buf, udp_buf, max(0, (int)udp_size - (int)N2N_REG_SUP_HASH_CHECK_LEN));
+            }
+            header_enc = packet_header_decrypt(udp_buf, max(0, (int)udp_size - (int)N2N_REG_SUP_HASH_CHECK_LEN),
+                                           (char *)eee->conf.community_name,
+                                           eee->conf.header_encryption_ctx_static, eee->conf.header_iv_ctx_static,
+                                           &stamp);
         }
         if(!header_enc) {
             traceEvent(TRACE_DEBUG, "readFromIPSocket failed to decrypt header.");
@@ -2500,6 +2527,15 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
                     }
                 }
 
+                // hash check (user/pw auth only)
+                if(eee->conf.shared_secret) {
+                    speck_128_encrypt(hash_buf, (speck_context_t*)eee->conf.shared_secret_ctx);
+                    if(memcmp(hash_buf, udp_buf + udp_size - N2N_REG_SUP_HASH_CHECK_LEN /* length is has already been checked */, N2N_REG_SUP_HASH_CHECK_LEN)) {
+                        traceEvent(TRACE_INFO, "Rx REGISTER_SUPER_ACK with wrong hash.");
+                        return;
+                    }
+                }
+
                 if(memcmp(ra.cookie, eee->curr_sn->last_cookie, N2N_COOKIE_SIZE)) {
                     traceEvent(TRACE_INFO, "Rx REGISTER_SUPER_ACK with wrong or old cookie.");
                     return;
@@ -2624,7 +2660,9 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
                     } else {
                         traceEvent(TRACE_ERROR, "Authentication error. MAC or IP address already in use or not released yet by supernode.");
                     }
-                    exit(1);
+                    // REVISIT: the following portion is too harsh, repeated error warning should be sufficient until it eventually is resolved,
+                    //           preventing de-auth attacks
+                    /* exit(1); this is too harsh, repeated error warning should be sufficient until it eventually is resolved, preventing de-auth attacks
                 } else {
                     HASH_FIND_PEER(eee->known_peers, nak.srcMac, peer);
                     if(peer != NULL) {
@@ -2633,7 +2671,7 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
                     HASH_FIND_PEER(eee->pending_peers, nak.srcMac, scan);
                     if(scan != NULL) {
                         HASH_DEL(eee->pending_peers, scan);
-                    }
+                    } */
                 }
                 break;
             }
@@ -2691,6 +2729,30 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
                                    macaddr_str(mac_buf1, pi.mac));
                     }
                 }
+                break;
+            }
+
+            case MSG_TYPE_RE_REGISTER_SUPER: {
+
+                if(eee->conf.header_encryption == HEADER_ENCRYPTION_ENABLED) {
+                    if(!find_peer_time_stamp_and_verify(eee, sn, null_mac, stamp, TIME_STAMP_NO_JITTER)) {
+                        traceEvent(TRACE_DEBUG, "readFromIPSocket dropped RE_REGISTER due to time stamp error.");
+                        return;
+                    }
+                }
+
+                // only accept in user/pw mode for immediate re-registration because the new
+                // key is required for continous traffic flow, in other modes edge will realize
+                // changes with regular recurring REGISTER_SUPER
+                if(!eee->conf.shared_secret) {
+                    traceEvent(TRACE_DEBUG, "readFromIPScoket dropped RE_REGISTER_SUPER as not in user/pw auth mode.");
+                    return;
+                }
+
+                traceEvent(TRACE_INFO, "Rx RE_REGISTER_SUPER");
+
+                eee->sn_wait = 2; /* immediately */
+
                 break;
             }
 

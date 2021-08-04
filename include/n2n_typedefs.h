@@ -254,7 +254,8 @@ typedef enum n2n_pc {
     n2n_register_super_nak = 8,     /* NAK from supernode to edge - registration refused */
     n2n_federation =         9,     /* Not used by edge */
     n2n_peer_info =          10,    /* Send info on a peer from sn to edge */
-    n2n_query_peer =         11     /* ask supernode for info on a peer */
+    n2n_query_peer =         11,    /* ask supernode for info on a peer */
+    n2n_re_register_super =  12     /* ask edge to re-register with supernode */
 } n2n_pc_t;
 
 #define N2N_FLAGS_OPTIONS                0x0080
@@ -355,6 +356,7 @@ typedef struct n2n_REGISTER_SUPER {
     n2n_ip_subnet_t    dev_addr;    /**< IP address of the tuntap adapter. */
     n2n_desc_t         dev_desc;    /**< Hint description correlated with the edge */
     n2n_auth_t         auth;        /**< Authentication scheme and tokens */
+    uint32_t           key_time;    /**< key time for dynamic key, used between federatred supernodes only */
 } n2n_REGISTER_SUPER_t;
 
 
@@ -373,6 +375,8 @@ typedef struct n2n_REGISTER_SUPER_ACK {
      */
     uint8_t            num_sn;      /**< Number of supernodes that were send
                                        * even if we cannot store them all. */
+
+    uint32_t           key_time;    /**< key time for dynamic key, used between federatred supernodes only */
 } n2n_REGISTER_SUPER_ACK_t;
 
 
@@ -747,7 +751,6 @@ struct sn_community {
     he_context_t          *header_encryption_ctx_dynamic; /* Header encryption cipher context. */
     he_context_t                  *header_iv_ctx_static;  /* Header IV encryption cipher context, REMOVE as soon as separate fields for checksum and replay protection available */
     he_context_t                  *header_iv_ctx_dynamic; /* Header IV encryption cipher context, REMOVE as soon as separate fields for checksum and replay protection available */
-    uint32_t                      last_dynamic_key_time;  /* UTC time of last dynamic key generation (second accuracy) */
     uint8_t                       dynamic_key[N2N_AUTH_CHALLENGE_SIZE]; /* dynamic key */
     struct                        peer_info *edges;       /* Link list of registered edges. */
     node_supernode_association_t  *assoc;                 /* list of other edges from this community and their supernodes */
@@ -805,6 +808,7 @@ typedef struct n2n_sn {
     struct sn_community                    *federation;
     n2n_private_public_key_t               private_key;       /* private federation key derived from federation name */
     n2n_auth_t                             auth;
+    uint32_t                               dynamic_key_time;  /* UTC time of last dynamic key generation (second accuracy) */
     uint8_t                                override_spoofing_protection; /* set if overriding MAC/IP spoofing protection (cli option '-M') */
     n2n_resolve_parameter_t                *resolve_parameter;/*Pointer to name resolver's parameter block */
 } n2n_sn_t;

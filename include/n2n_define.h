@@ -29,6 +29,7 @@
 #define MSG_TYPE_PEER_INFO                  10
 #define MSG_TYPE_QUERY_PEER                 11
 #define MSG_TYPE_MAX_TYPE                   11
+#define MSG_TYPE_RE_REGISTER_SUPER          12
 
 /* Max available space to add supernodes' informations (sockets and MACs) in REGISTER_SUPER_ACK
  * Field sizes of REGISTER_SUPER_ACK as used in encode/decode fucntions in src/wire.c
@@ -105,6 +106,9 @@ enum sn_purge{SN_PURGEABLE = 0, SN_UNPURGEABLE = 1};
 #define HEADER_ENCRYPTION_NONE                1
 #define HEADER_ENCRYPTION_ENABLED             2
 
+/* REGISTER_SUPER_ACK packet hash length with user/pw auth, up to 16 bytes */
+#define N2N_REG_SUP_HASH_CHECK_LEN           16
+
 #define DEFAULT_MTU     1290
 
 #define HASH_ADD_PEER(head,add) \
@@ -173,6 +177,14 @@ enum skip_add{SN_ADD = 0, SN_ADD_SKIP = 1, SN_ADD_ADDED = 2};
 #define N2N_IFNAMSIZ               64
 #else
 #define N2N_IFNAMSIZ               16 /* 15 chars * NULL */
+#endif
+
+#ifdef _MSC_VER
+#define N2N_THREAD_RETURN_DATATYPE       DWORD WINAPI
+#define N2N_THREAD_PARAMETER_DATATYPE    LPVOID
+#else
+#define N2N_THREAD_RETURN_DATATYPE        void*
+#define N2N_THREAD_PARAMETER_DATATYPE     void*
 #endif
 
 #define SN_SELECTION_CRITERION_DATA_TYPE    uint32_t
