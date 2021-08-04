@@ -2360,7 +2360,7 @@ void process_udp (n2n_edge_t *eee, const struct sockaddr_in *sender_sock, const 
                             if(skip_add == SN_ADD_ADDED) {
                                 sn->ip_addr = calloc(1,N2N_EDGE_SN_HOST_SIZE);
                                 if(sn->ip_addr != NULL) {
-                                    inet_ntop(payload->sock.family,
+                                    inet_ntop_ex(payload->sock.family,
                                               (payload->sock.family == AF_INET) ? (void*)&(payload->sock.addr.v4) : (void*)&(payload->sock.addr.v6),
                                               sn->ip_addr, N2N_EDGE_SN_HOST_SIZE - 1);
                                     sprintf (sn->ip_addr, "%s:%u", sn->ip_addr, (uint16_t)(payload->sock.port));
@@ -2921,9 +2921,9 @@ static char* route_cmd_to_str (int cmd, const n2n_route_t *route, char *buf, siz
     }
 
     addr.s_addr = route->net_addr;
-    inet_ntop(AF_INET, &addr, netbuf, sizeof(netbuf));
+    inet_ntop_ex(AF_INET, &addr, netbuf, sizeof(netbuf));
     addr.s_addr = route->gateway;
-    inet_ntop(AF_INET, &addr, gwbuf, sizeof(gwbuf));
+    inet_ntop_ex(AF_INET, &addr, gwbuf, sizeof(gwbuf));
 
     snprintf(buf, bufsize, "%s %s/%d via %s", cmd_str, netbuf, route->net_bitlen, gwbuf);
 
@@ -3370,7 +3370,7 @@ int quick_edge_init (char *device_name, char *community_name,
                    device_mac, DEFAULT_MTU
 #ifdef WIN32
 				 , 0
-#endif                   
+#endif
                    ) < 0)
         return(-2);
 
