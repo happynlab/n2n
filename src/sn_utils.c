@@ -425,10 +425,9 @@ int load_allowed_sn_community (n2n_sn_t *sss) {
                 comm->auto_ip_net.net_addr = ntohl(net);
                 comm->auto_ip_net.net_bitlen = bitlen;
                 traceEvent(TRACE_INFO, "HPYSERVERMSG:Assigned sub-network %s/%u to community '%s'.",
-                traceEvent(TRACE_INFO, "assigned sub-network %s/%u to community '%s'",
                                        inet_ntoa(*(struct in_addr *) &net),
-                           comm->auto_ip_net.net_bitlen,
-                           comm->community);
+                                       comm->auto_ip_net.net_bitlen,
+                                       comm->community);
             } else {
                 assign_one_ip_subnet(sss, comm);
             }
