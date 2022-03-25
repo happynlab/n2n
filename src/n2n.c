@@ -420,13 +420,13 @@ uint8_t resolve_check (n2n_resolve_parameter_t *param, uint8_t requires_resoluti
 
     uint8_t ret = requires_resolution; /* if trylock fails, it still requires resolution */
 
-#ifdef HAVE_PTHREAD    
+#ifdef HAVE_PTHREAD
     n2n_resolve_ip_sock_t   *entry, *tmp_entry;
     n2n_sock_str_t sock_buf;
 
     if(NULL == param)
         return ret;
-    
+
     // check_interval and last_check do not need to be guarded by the mutex because
     // their values get changed and evaluated only here
 
@@ -587,9 +587,9 @@ void hexdump (const uint8_t *buf, size_t len) {
 
 void print_n2n_version () {
 
-    printf("Welcome to n2n v.%s for %s\n"
+    printf("Welcome to happynet v.%s for %s\n"
            "Built on %s\n"
-           "Copyright 2007-2021 - ntop.org and contributors\n\n",
+           "Copyright 2007-2021 - ntop.org and 2022 - happyn.cn and contributors\n\n",
            GIT_RELEASE, PACKAGE_OSNAME, PACKAGE_BUILDDATE);
 }
 
