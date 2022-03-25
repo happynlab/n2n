@@ -424,6 +424,7 @@ int load_allowed_sn_community (n2n_sn_t *sss) {
             if(has_net) {
                 comm->auto_ip_net.net_addr = ntohl(net);
                 comm->auto_ip_net.net_bitlen = bitlen;
+                traceEvent(TRACE_INFO, "HPYSERVERMSG:Assigned sub-network %s/%u to community '%s'.",
                 traceEvent(TRACE_INFO, "assigned sub-network %s/%u to community '%s'",
                                        inet_ntoa(*(struct in_addr *) &net),
                            comm->auto_ip_net.net_bitlen,
@@ -1097,6 +1098,15 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_INFO, "created edge  %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                dec_ip_bit_str_t ip_bit_str = {'\0'};
+                traceEvent(TRACE_INFO, "HPYSERVERMSG:happyn edge created: community:%s, edge_mac:%s, "
+                           "edge_addr:%s, edge_name:%s, ts:%d",
+                           comm->community,
+                           (is_null_mac(scan->mac_addr)) ? "UNKNOWN" : macaddr_str(mac_buf, reg->edgeMac),
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "UNKNOWN") :
+                                                              ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                           scan->dev_desc, now);
             }
             ret = update_edge_new_sn;
         } else {
@@ -1105,6 +1115,7 @@ static int update_edge (n2n_sn_t *sss,
         }
     } else {
         /* Known */
+        dec_ip_bit_str_t ip_bit_str = {'\0'};
         if(auth_edge(&(scan->auth), &(reg->auth), answer_auth, comm) == 0) {
             if(!sock_equal(sender_sock, &(scan->sock))) {
                 memcpy(&(scan->sock), sender_sock, sizeof(n2n_sock_t));
@@ -1119,6 +1130,15 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_INFO, "updated edge  %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                traceEvent(TRACE_INFO, "HPYSERVERMSG:happyn edge updated: community:%s, edge_mac:%s, "
+                           "edge_addr:%s, edge_name:%s, ts:%d",
+                           comm->community,
+                           (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                                                              ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                           scan->dev_desc, now);
+
                 ret = update_edge_sock_change;
             } else {
                 scan->last_cookie = reg->cookie;
@@ -1126,6 +1146,18 @@ static int update_edge (n2n_sn_t *sss,
                 traceEvent(TRACE_DEBUG, "edge unchanged %s ==> %s",
                            macaddr_str(mac_buf, reg->edgeMac),
                            sock_to_cstr(sockbuf, sender_sock));
+
+                /* for edge client status monitor:default 10 * 20 =200s */
+                static uint64_t log_interval = 10;
+                if ((now - scan->last_seen) % 10 == 0 && log_interval++ % 10 == 0) {
+                    traceEvent(TRACE_INFO, "HPYSERVERMSG:happyn edge unchanged: community:%s, edge_mac:%s, "
+                               "edge_addr:%s, edge_name:%s, ts:%d",
+                               comm->community,
+                               (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
+                               (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                                                                  ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
+                               scan->dev_desc, now);
+                }
 
                 ret = update_edge_no_change;
             }
@@ -1292,7 +1324,7 @@ int assign_one_ip_subnet (n2n_sn_t *sss,
         comm->auto_ip_net.net_addr = net_id_i;
         comm->auto_ip_net.net_bitlen = sss->min_auto_ip_net.net_bitlen;
         net = htonl(comm->auto_ip_net.net_addr);
-        traceEvent(TRACE_INFO, "assigned sub-network %s/%u to community '%s'",
+        traceEvent(TRACE_INFO, "HPYSERVERMSG:Assigned sub-network %s/%u to community '%s'.",
                    inet_ntoa(*(struct in_addr *) &net),
                    comm->auto_ip_net.net_bitlen,
                    comm->community);

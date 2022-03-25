@@ -27,7 +27,7 @@ execute_process(
 )
 string(REGEX REPLACE "\n$" "" GIT_REV "${GIT_REV}")
 string(REGEX REPLACE "\n$" "" GIT_ID "${GIT_ID}")
-set(N2N_VERSION "${N2N_VERSION}.r${GIT_REV}.${GIT_ID}")
+set(N2N_VERSION "${N2N_VERSION}.r${GIT_REV}.${GIT_ID}.happyn")
 MESSAGE(STATUS "Build from git rev: ${N2N_VERSION}")
 endif (GIT_ERROR_CODE EQUAL 0)
 
