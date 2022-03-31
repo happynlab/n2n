@@ -360,7 +360,7 @@ jobs:
     name: Binaries for MacOS
     needs:
       - test_macos
-    runs-on: macos-latest
+    runs-on: macos-10.15
     strategy:
       fail-fast: true
       matrix:
@@ -413,7 +413,7 @@ jobs:
     name: Binaries for MacOS (universal arch)
     needs:
       - test_macos
-    runs-on: macos-latest
+    runs-on: macos-10.15
 
     steps:
       - uses: actions/checkout@v2
