@@ -16,7 +16,9 @@
 #if defined(__MINGW32__)
 /* should be defined here and before winsock gets included */
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x501 //Otherwise the linker doesnt find getaddrinfo
+#define _WIN32_WINNT 0x0600 //Otherwise the linker doesnt find getaddrinfo
+#else
+#define _WIN32_WINNT 0x0600 //Otherwise the linker doesnt find getaddrinfo
 #endif /* #ifndef _WIN32_WINNT */
 #include <inttypes.h>
 #endif /* #if defined(__MINGW32__) */
@@ -38,7 +40,7 @@
 #include "wintap.h"
 
 #undef EAFNOSUPPORT
-#define EAFNOSUPPORT   WSAEAFNOSUPPORT 
+#define EAFNOSUPPORT   WSAEAFNOSUPPORT
 #define MAX(a,b) (a > b ? a : b)
 #define MIN(a,b) (a < b ? a : b)
 

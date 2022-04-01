@@ -44,7 +44,7 @@ static int setup_ifname (int fd, const char *ifname, const char *ipaddr,
     ifr.ifr_addr.sa_family = AF_INET;
 
     // interface address
-    inet_pton(AF_INET, ipaddr, &((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr);
+    inet_pton_ex(AF_INET, ipaddr, &((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr);
     if(ioctl(fd, SIOCSIFADDR, &ifr) == -1) {
         traceEvent(TRACE_ERROR, "ioctl(SIOCSIFADDR) failed [%d]: %s", errno, strerror(errno));
         return -2;
@@ -52,7 +52,7 @@ static int setup_ifname (int fd, const char *ifname, const char *ipaddr,
 
     // netmask
     if(netmask && (((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr != 0)) {
-        inet_pton(AF_INET, netmask, &((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr);
+        inet_pton_ex(AF_INET, netmask, &((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr);
         if(ioctl(fd, SIOCSIFNETMASK, &ifr) == -1) {
             traceEvent(TRACE_ERROR, "ioctl(SIOCSIFNETMASK, %s) failed [%d]: %s", netmask, errno, strerror(errno));
             return -3;
