@@ -1025,7 +1025,7 @@ int main (int argc, char* argv[]) {
     if(conf.transop_id == N2N_TRANSFORM_ID_NULL) {
         if(conf.encrypt_key) {
             // make sure that AES is default cipher if key only (and no cipher) is specified
-            traceEvent(TRACE_WARNING, "switching to AES as key was provided");
+            traceEvent(TRACE_INFO, "switching to AES as key was provided");
             conf.transop_id = N2N_TRANSFORM_ID_AES;
         }
     }
