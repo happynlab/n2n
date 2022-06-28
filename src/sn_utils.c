@@ -1107,7 +1107,7 @@ static int update_edge (n2n_sn_t *sss,
                            "edge_addr:%s, edge_name:%s, ts:%d",
                            comm->community,
                            (is_null_mac(scan->mac_addr)) ? "UNKNOWN" : macaddr_str(mac_buf, reg->edgeMac),
-                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "UNKNOWN") :
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == UNPURGEABLE) ? "-l" : "UNKNOWN") :
                                                               ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
                            scan->dev_desc, now);
             }
@@ -1138,7 +1138,7 @@ static int update_edge (n2n_sn_t *sss,
                            "edge_addr:%s, edge_name:%s, ts:%d",
                            comm->community,
                            (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
-                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                           (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == UNPURGEABLE) ? "-l" : "") :
                                                               ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
                            scan->dev_desc, now);
 
@@ -1157,7 +1157,7 @@ static int update_edge (n2n_sn_t *sss,
                                "edge_addr:%s, edge_name:%s, ts:%d",
                                comm->community,
                                (is_null_mac(scan->mac_addr)) ? "" : macaddr_str(mac_buf, reg->edgeMac),
-                               (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == SN_UNPURGEABLE) ? "-l" : "") :
+                               (scan->dev_addr.net_addr == 0) ? ((scan->purgeable == UNPURGEABLE) ? "-l" : "") :
                                                                   ip_subnet_to_str(ip_bit_str, &scan->dev_addr),
                                scan->dev_desc, now);
                 }
