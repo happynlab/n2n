@@ -1,0 +1,369 @@
+---
+name: cmakebuild
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+  pull_request:
+
+jobs:
+
+  binaries_windows_x64:
+    name: Binaries for Windows x64
+    runs-on: windows-2019
+
+    strategy:
+      matrix:
+        arch: [x64]
+
+        include:
+          # Prettier run names.
+          - {os: windows-2019, name: VS 2019}
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: egor-tensin/vs-shell@v2
+        with:
+          arch: x64
+
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+          git submodule init
+          git submodule update
+
+      - name: Configure and Build
+        run: |
+          $VER_FILE_SHORT=Get-Content .\VERSION
+          New-Item -ItemType "directory" -Path ${{ matrix.arch }} -Force
+          cd ${{ matrix.arch }}
+          'set(CMAKE_CXX_FLAGS_RELEASE "/MT")' | out-file .\toolChain.cmake -append
+          'set(CMAKE_C_FLAGS_RELEASE "/MT")' | out-file .\toolChain.cmake -append
+          cmake.exe -G "Visual Studio 16 2019" -A ${{ matrix.arch }} -S .. `
+                                              -DCMAKE_TOOLCHAIN_FILE=./toolChain.cmake `
+                                              -DN2N_OPTION_USE_PORTMAPPING=ON -B .
+          MSBuild.exe ALL_BUILD.vcxproj /t:Build /p:Configuration=Release
+
+          $RELEASE_DIR = "Release" + $VER_FILE_SHORT
+          mv Release  $RELEASE_DIR
+
+      - name: Create binary dir
+        run: |
+          mkdir -p windows_${{ matrix.arch }}
+          cp -r ${{ matrix.arch }}/Release* windows_${{ matrix.arch }}
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: windows_${{ matrix.arch }}
+          path: windows_${{ matrix.arch }}
+
+
+  binaries_windows_x86:
+    name: Binaries for Windows x86
+    runs-on: windows-2019
+
+    strategy:
+      matrix:
+        arch: [x86]
+
+        include:
+          # Prettier run names.
+          - {os: windows-2019, name: VS 2019}
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: egor-tensin/vs-shell@v2
+        with:
+          arch: x64
+
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+          git submodule init
+          git submodule update
+
+      - name: Configure and Build
+        run: |
+          $VER_FILE_SHORT=Get-Content .\VERSION
+          New-Item -ItemType "directory" -Path ${{ matrix.arch }} -Force
+          cd ${{ matrix.arch }}
+          'set(CMAKE_CXX_FLAGS_RELEASE "/MT")' | out-file .\toolChain.cmake -append
+          'set(CMAKE_C_FLAGS_RELEASE "/MT")' | out-file .\toolChain.cmake -append
+          cmake.exe -G "Visual Studio 16 2019" -A Win32 -S .. `
+                                              -DCMAKE_TOOLCHAIN_FILE=./toolChain.cmake `
+                                              -DN2N_OPTION_USE_PORTMAPPING=ON -B .
+          MSBuild.exe ALL_BUILD.vcxproj /t:Build /p:Configuration=Release
+
+          $RELEASE_DIR = "Release" + $VER_FILE_SHORT
+          mv Release  $RELEASE_DIR
+
+      - name: Create binary dir
+        run: |
+          mkdir -p windows_${{ matrix.arch }}
+          cp -r ${{ matrix.arch }}/Release* windows_${{ matrix.arch }}
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: windows_${{ matrix.arch }}
+          path: windows_${{ matrix.arch }}
+
+  binaries_linux_x64:
+    name: Binaries for linux amd64
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: 
+          - amd64
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+          git submodule init
+          git submodule update
+
+      - name: Install dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install cmake \
+                       libpcap-dev libcap-dev
+
+      - name: Configure and Build
+        shell: bash
+        run: |
+          mkdir ${{ matrix.arch }}
+          cd ${{ matrix.arch }}
+          echo "set(CMAKE_SYSTEM_NAME Linux)" >>  toolChain.cmake
+          cmake .. -DCMAKE_TOOLCHAIN_FILE=./toolChain.cmake \
+                   -DN2N_OPTION_USE_PORTMAPPING=ON \
+                   -DN2N_OPTION_USE_PTHREAD=ON \
+                   -DN2N_OPTION_USE_CAPLIB=ON  \
+                   -DN2N_OPTION_USE_PCAPLIB=ON -B .
+          make
+
+      - name: Create binary dir
+        shell: bash
+        run: |
+          VER_FILE_SHORT=$(cat "./VERSION")
+          cd ${{ matrix.arch }}
+          find . -name *bin*|xargs -I@ find @ -type f|xargs chmod +x
+          make install DESTDIR=../linux_${{ matrix.arch }}/$VER_FILE_SHORT
+          cp n2n-* ../linux_${{ matrix.arch }}/$VER_FILE_SHORT/usr/local/bin/
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux_${{ matrix.arch }}
+          path: linux_${{ matrix.arch }}
+
+  binaries_linux_i386:
+    name: Binaries for linux i386
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: 
+          - i386
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+          git submodule init
+          git submodule update
+
+      - name: Install dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install gcc-multilib g++-multilib
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt-get install cmake libpcap-dev:i386 \
+                       libcap-dev:i386 libblis-pthread-dev
+
+      - name: Configure and Build
+        shell: bash
+        run: |
+          mkdir ${{ matrix.arch }}
+          cd ${{ matrix.arch }}
+          echo "set(CMAKE_SYSTEM_NAME Linux)" >>  toolChain.cmake
+          echo "set(CMAKE_C_COMPILER gcc -m32)" >> toolChain.cmake
+          echo "set(CMAKE_CXX_COMPILER g++ -m32)" >> toolChain.cmake
+          cmake .. -DCMAKE_TOOLCHAIN_FILE=./toolChain.cmake \
+                   -DN2N_OPTION_USE_PORTMAPPING=ON \
+                   -DN2N_OPTION_USE_PTHREAD=ON \
+                   -DN2N_OPTION_USE_CAPLIB=ON  \
+                   -DN2N_OPTION_USE_PCAPLIB=ON -B .
+          make
+
+      - name: Create binary dir
+        shell: bash
+        run: |
+          VER_FILE_SHORT=$(cat "./VERSION")
+          cd ${{ matrix.arch }}
+          find . -name *bin*|xargs -I@ find @ -type f|xargs chmod +x
+          make install DESTDIR=../linux_${{ matrix.arch }}/$VER_FILE_SHORT
+          cp n2n-* ../linux_${{ matrix.arch }}/$VER_FILE_SHORT/usr/local/bin/
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux_${{ matrix.arch }}
+          path: linux_${{ matrix.arch }}
+
+
+  binaries_macos_x64:
+    name: Binaries for MacOS (x64 arch)
+    runs-on: macos-10.15
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+          git submodule init
+          git submodule update
+
+      - name: Install packages needed for build
+        run: |
+          brew install automake cmake
+
+      - name: Configure and Build
+        shell: bash
+        run: |
+          # this is a hack! it assumes the default SDK is the 'right' one
+          export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+          mkdir build_x64
+          cd build_x64
+          cmake ../ -DN2N_OPTION_USE_PORTMAPPING=ON \
+                    -DN2N_OPTION_USE_PTHREAD=ON \
+                    -DN2N_OPTION_USE_PCAPLIB=ON -B .
+          make
+
+      - name: Create binary dir
+        shell: bash
+        run: |
+          VER_FILE_SHORT=$(cat "./VERSION")
+          cd build_x64
+          find . -name *bin*|xargs -I@ find @ -type f|xargs chmod +x
+          make install DESTDIR=../macos_1015_x64/$VER_FILE_SHORT
+          cp n2n-* ../macos_1015_x64/$VER_FILE_SHORT/usr/local/bin/
+
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: macos_1015_x64
+          path: macos_1015_x64
+
+#  binaries_macos_universal:
+#    name: Binaries for MacOS (universal arch)
+#    runs-on: macos-10.15
+#
+#    steps:
+#      - uses: actions/checkout@v2
+#
+#      - name: Fix Checkout
+#        run: |
+#          git fetch --force --tags
+#          git submodule init
+#          git submodule update
+#
+#      - name: Install packages needed for build
+#        run: |
+#          brew install automake
+#
+#      - name: Configure and Build
+#        shell: bash
+#        run: |
+#          # this is a hack! it assumes the default SDK is the 'right' one
+#          export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+#          ./autogen.sh
+#          export CC=clang
+#          export CFLAGS="-arch x86_64 -arch arm64"
+#          export LDFLAGS="-arch x86_64 -arch arm64"
+#          ./configure --enable-pthread
+#          make
+#
+#      - name: Create binary dir
+#        shell: bash
+#        run: |
+#          VER_FILE_SHORT=$(cat "./VERSION")
+#          make install DESTDIR=macos_1015_darwin_universal/$VER_FILE_SHORT
+#
+#      - name: Upload binary artifacts
+#        uses: actions/upload-artifact@v2
+#        with:
+#          name: macos_1015_darwin_universal
+#          path: macos_1015_darwin_universal
+
+  # Given the clearly documented use of annotated tags to signal releases,
+  # it seems strange that there is no simple way to trigger actions if the
+  # tag is annotated.  So we need to jump through some extra hoops.
+  #
+  # Looking at https://github.com/actions/checkout/issues/290 seems to show
+  # that github just doesnt care about how git expects annotated tags to be
+  # used.
+  #
+  # This workflow has added a `git fetch --force --tags` to every job that
+  # needs to have working tags
+
+  upload_release:
+    name: Upload Release Assets
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - binaries_windows_x64
+      - binaries_windows_x86
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Fix Checkout
+        run: |
+          git fetch --force --tags
+
+      - name: Get Tag Type
+        id: get_tagtype
+        run: |
+          TYPE=$(git cat-file -t $GITHUB_REF)
+          echo "::set-output name=TAGTYPE::$TYPE"
+          echo ==========
+          echo REF=$GITHUB_REF
+          echo TAGTYPE=$TYPE
+
+      - name: Fetch all Artifacts
+        if: steps.get_tagtype.outputs.TAGTYPE == 'tag'
+        uses: actions/download-artifact@v2
+        with:
+          path: artifacts
+
+      - name: Upload Assets to Release
+        if: steps.get_tagtype.outputs.TAGTYPE == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          files: |
+            artifacts/*
