@@ -24,10 +24,10 @@ if [ -d "$TOPDIR/.git" ]; then
 
     VER_GIT_SHORT=$(git describe --abbrev=0)
 
-    if [ "$VER_FILE_SHORT" != "$VER_GIT_SHORT" ]; then
-        echo "Error: VERSION file does not match tag version ($VER_FILE_SHORT != $VER_GIT_SHORT)"
-        exit 1
-    fi
+    #if [ "$VER_FILE_SHORT" != "$VER_GIT_SHORT" ]; then
+    #    echo "Error: VERSION file does not match tag version ($VER_FILE_SHORT != $VER_GIT_SHORT)"
+    #    exit 1
+    #fi
 
     VER_SHORT="$VER_GIT_SHORT"
     VER_HASH=$(git rev-parse --short HEAD)
