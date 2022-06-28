@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,9 @@
  * along with this program; if not see see <http://www.gnu.org/licenses/>
  *
  */
+
+#ifndef _N2N_DEFINE_H_
+#define _N2N_DEFINE_H_
 
 /* N2N packet header indicators. */
 #define MSG_TYPE_REGISTER                   1
@@ -94,12 +97,8 @@
 #define FEDERATION_NAME "*Federation"
 enum federation {IS_NO_FEDERATION = 0,IS_FEDERATION = 1};
 
-/* (un)purgeable community indicator (supernode) */
-#define COMMUNITY_UNPURGEABLE                 0
-#define COMMUNITY_PURGEABLE                   1
-
-/* (un)purgeable supernode indicator */
-enum sn_purge {SN_PURGEABLE = 0, SN_UNPURGEABLE = 1};
+/* (un)purgeable indicator for supernodes, communities, routes, ... */
+enum sn_purge {UNPURGEABLE = 0, PURGEABLE = 1};
 
 /* Header encryption indicators */
 #define HEADER_ENCRYPTION_UNKNOWN             0
@@ -121,10 +120,16 @@ enum sn_purge {SN_PURGEABLE = 0, SN_UNPURGEABLE = 1};
 #define N2N_EDGE_MGMT_PORT        5644
 #define N2N_SN_MGMT_PORT          5645
 
-enum n2n_mgmt_type {
-    N2N_MGMT_READ = 0,
-    N2N_MGMT_WRITE = 1,
+enum n2n_event_topic {
+    N2N_EVENT_DEBUG = 0,
+    N2N_EVENT_TEST = 1,
+    N2N_EVENT_PEER = 2,
 };
+
+#define N2N_EVENT_PEER_PURGE    1
+#define N2N_EVENT_PEER_CLEAR    2
+#define N2N_EVENT_PEER_DEL_P2P  3
+#define N2N_EVENT_PEER_ADD_P2P  4
 
 #define N2N_MGMT_PASSWORD  "n2n"               /* default password for management port access (so far, json only) */
 
@@ -212,4 +217,6 @@ enum skip_add {SN_ADD = 0, SN_ADD_SKIP = 1, SN_ADD_ADDED = 2};
 
 #ifndef min
 #define min(a, b) (((a) >(b)) ? (b) : (a))
+#endif
+
 #endif

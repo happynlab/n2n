@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -189,6 +189,9 @@ int decode_REGISTER_SUPER_NAK (n2n_REGISTER_SUPER_NAK_t * nak,
 int fill_sockaddr (struct sockaddr * addr,
                    size_t addrlen,
                    const n2n_sock_t * sock);
+
+int fill_n2nsock (n2n_sock_t* sock,
+                  const struct sockaddr* sa);
 
 int encode_PACKET (uint8_t * base,
                    size_t * idx,

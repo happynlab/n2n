@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ int tuntap_open (tuntap_dev *device,
     }
 
     // store the device name for later reuse
-    strncpy(device->dev_name, ifr.ifr_name, MIN(IFNAMSIZ, N2N_IFNAMSIZ));
+    strncpy(device->dev_name, ifr.ifr_name, MIN(IFNAMSIZ, sizeof(devstr_t)));
 
     if(device_mac && device_mac[0]) {
         // use the user-provided MAC

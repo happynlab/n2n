@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,7 +99,7 @@ void closeTraceFile () {
 }
 
 #define N2N_TRACE_DATESIZE 32
-void traceEvent (int eventTraceLevel, char* file, int line, char * format, ...) {
+void _traceEvent (int eventTraceLevel, char* file, int line, char * format, ...) {
 
     va_list va_ap;
 
@@ -148,8 +148,9 @@ void traceEvent (int eventTraceLevel, char* file, int line, char * format, ...) 
             snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
             syslog(LOG_INFO, "%s", out_buf);
         } else {
+#endif
             for(i = strlen(file) - 1; i > 0; i--) {
-                if(file[i] == '/') {
+                if((file[i] == '/') || (file[i] == '\\')) {
                     i++;
                     break;
                 }
@@ -157,24 +158,26 @@ void traceEvent (int eventTraceLevel, char* file, int line, char * format, ...) 
             snprintf(out_buf, sizeof(out_buf), "%s [%s:%d] %s%s", theDate, &file[i], line, extra_msg, buf);
             fprintf(traceFile, "%s\n", out_buf);
             fflush(traceFile);
+#ifndef WIN32
         }
-#else
-        /* this is the WIN32 code */
-        for(i = strlen(file) - 1; i > 0; i--) {
-            if(file[i] == '\\') {
-                i++;
-                break;
-            }
-        }
-        snprintf(out_buf, sizeof(out_buf), "%s [%s:%d] %s%s", theDate, &file[i], line, extra_msg, buf);
-        fprintf(traceFile, "%s\n", out_buf);
-        fflush(traceFile);
 #endif
     }
 
 }
 
+
 /* *********************************************** */
+
+
+/* stringify in_addr type to ipstr_t */
+char* inaddrtoa (ipstr_t out, struct in_addr addr) {
+
+    if(!inet_ntop(AF_INET, &addr, out, sizeof(ipstr_t)))
+        out[0] = '\0';
+
+    return out;
+}
+
 
 /* addr should be in network order. Things are so much simpler that way. */
 char* intoa (uint32_t /* host order */ addr, char* buf, uint16_t buf_len) {
@@ -313,9 +316,9 @@ int supernode2sock (n2n_sock_t *sn, const n2n_sn_name_t addrIn) {
 }
 
 
+#ifdef HAVE_PTHREAD
 N2N_THREAD_RETURN_DATATYPE resolve_thread(N2N_THREAD_PARAMETER_DATATYPE p) {
 
-#ifdef HAVE_PTHREAD
     n2n_resolve_parameter_t *param = (n2n_resolve_parameter_t*)p;
     n2n_resolve_ip_sock_t   *entry, *tmp_entry;
     time_t                  rep_time = N2N_RESOLVE_INTERVAL / 10;
@@ -360,8 +363,8 @@ N2N_THREAD_RETURN_DATATYPE resolve_thread(N2N_THREAD_PARAMETER_DATATYPE p) {
         // unlock access
         pthread_mutex_unlock(&param->access);
     }
-#endif
 }
+#endif
 
 
 int resolve_create_thread (n2n_resolve_parameter_t **param, struct peer_info *sn_list) {
@@ -403,6 +406,8 @@ int resolve_create_thread (n2n_resolve_parameter_t **param, struct peer_info *sn
     pthread_mutex_init(&((*param)->access), NULL);
 
     return 0;
+#else
+    return -1;
 #endif
 }
 
@@ -589,8 +594,8 @@ void print_n2n_version () {
 
     printf("Welcome to happynet v.%s for %s\n"
            "Built on %s\n"
-           "Copyright 2007-2021 - ntop.org and 2022 - happyn.cn and contributors\n\n",
-           GIT_RELEASE, PACKAGE_OSNAME, PACKAGE_BUILDDATE);
+           "Copyright 2007-2022 - ntop.org and happyn.net and contributors\n\n",
+           PACKAGE_VERSION, PACKAGE_OSNAME, PACKAGE_BUILDDATE);
 }
 
 /* *********************************************** */
@@ -630,7 +635,7 @@ size_t purge_peer_list (struct peer_info **peer_list,
     size_t retval = 0;
 
     HASH_ITER(hh, *peer_list, scan, tmp) {
-        if((scan->purgeable == SN_PURGEABLE) && (scan->last_seen < purge_before)) {
+        if((scan->purgeable == PURGEABLE) && (scan->last_seen < purge_before)) {
             if((scan->socket_fd >=0) && (scan->socket_fd != socket_not_to_close)) {
                 if(tcp_connections) {
                     HASH_FIND_INT(*tcp_connections, &scan->socket_fd, conn);
@@ -643,6 +648,8 @@ size_t purge_peer_list (struct peer_info **peer_list,
                 }
             }
             HASH_DEL(*peer_list, scan);
+            mgmt_event_post(N2N_EVENT_PEER,N2N_EVENT_PEER_PURGE,scan);
+            /* FIXME: generates events for more than just p2p */
             retval++;
             free(scan);
         }
@@ -658,7 +665,12 @@ size_t clear_peer_list (struct peer_info ** peer_list) {
     size_t retval = 0;
 
     HASH_ITER(hh, *peer_list, scan, tmp) {
+        if (scan->purgeable == UNPURGEABLE && scan->ip_addr) {
+            free(scan->ip_addr);
+        }
         HASH_DEL(*peer_list, scan);
+        mgmt_event_post(N2N_EVENT_PEER,N2N_EVENT_PEER_CLEAR,scan);
+        /* FIXME: generates events for more than just p2p */
         retval++;
         free(scan);
     }
@@ -700,14 +712,18 @@ extern int str2mac (uint8_t * outmac /* 6 bytes */, const char * s) {
 extern char * sock_to_cstr (n2n_sock_str_t out,
                             const n2n_sock_t * sock) {
 
+
     if(NULL == out) {
         return NULL;
     }
     memset(out, 0, N2N_SOCKBUF_SIZE);
 
     if(AF_INET6 == sock->family) {
-        /* INET6 not written yet */
-        snprintf(out, N2N_SOCKBUF_SIZE, "XXXX:%hu", sock->port);
+        char tmp[sizeof(n2n_sock_str_t)];
+
+        tmp[0] = '\0';
+        inet_ntop(AF_INET6, sock->addr.v6, tmp, sizeof(n2n_sock_str_t));
+        snprintf(out, N2N_SOCKBUF_SIZE, "[%s]:%hu", tmp[0] ? tmp : "", sock->port);
         return out;
     } else {
         const uint8_t * a = sock->addr.v4;

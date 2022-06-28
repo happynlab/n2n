@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -417,5 +417,6 @@ int cc20_deinit (cc20_context_t *ctx) {
 #if defined (HAVE_OPENSSL_1_1)
     if(ctx->ctx) EVP_CIPHER_CTX_free(ctx->ctx);
 #endif
+    free(ctx);
     return 0;
 }

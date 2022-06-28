@@ -1,5 +1,5 @@
 /*
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ int bin_to_ascii (char *out, uint8_t *in, size_t in_len) {
         buf1 = in[bit_count / 8];
         buf1 <<= bit_count % 8;
 
-        buf2 = ((bit_count + 6) < (8 * in_len)) ? in[bit_count / 8 + 1] : 0;
+        buf2 = ((bit_count + 8) < (8 * in_len)) ? in[bit_count / 8 + 1] : 0;
         buf2 >>= 8 - (bit_count % 8);
 
         buf1 |= buf2;

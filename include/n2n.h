@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,8 @@
 
     tunctl -u UID -t tunX
 */
+
+#define SN_MANUAL_MAC   /* allows supernode MAC address to be set manually */
 
 #define N2N_HAVE_DAEMON /* needs to be defined before it gets undefined */
 #define N2N_HAVE_TCP    /* needs to be defined before it gets undefined */
@@ -101,7 +103,7 @@
 #include <syslog.h>
 #include <sys/wait.h>
 
-#ifdef HAVE_LIBZSTD
+#ifdef HAVE_ZSTD
 #include <zstd.h>
 #endif
 
@@ -156,17 +158,21 @@
 #include "network_traffic_filter.h"
 #include "auth.h"
 
+#include "n2n_port_mapping.h"
+
+#include "json.h"
+
 /* ************************************** */
 
 #include "header_encryption.h"
 #include "tf.h"
 
 #ifndef TRACE_ERROR
-#define TRACE_ERROR       0, __FILE__, __LINE__
-#define TRACE_WARNING     1, __FILE__, __LINE__
-#define TRACE_NORMAL      2, __FILE__, __LINE__
-#define TRACE_INFO        3, __FILE__, __LINE__
-#define TRACE_DEBUG       4, __FILE__, __LINE__
+#define TRACE_ERROR       0
+#define TRACE_WARNING     1
+#define TRACE_NORMAL      2
+#define TRACE_INFO        3
+#define TRACE_DEBUG       4
 #endif
 
 /* ************************************** */
@@ -177,6 +183,10 @@ int n2n_transop_tf_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
 int n2n_transop_aes_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
 int n2n_transop_cc20_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
 int n2n_transop_speck_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
+int n2n_transop_lzo_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
+#ifdef HAVE_ZSTD
+int n2n_transop_zstd_init (const n2n_edge_conf_t *conf, n2n_trans_op_t *ttt);
+#endif
 
 /* Log */
 void setTraceLevel (int level);
@@ -184,7 +194,8 @@ void setUseSyslog (int use_syslog);
 void setTraceFile (FILE *f);
 int getTraceLevel ();
 void closeTraceFile ();
-void traceEvent (int eventTraceLevel, char* file, int line, char * format, ...);
+void _traceEvent (int eventTraceLevel, char* file, int line, char * format, ...);
+#define traceEvent(level, format, ...) _traceEvent(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 /* Tuntap API */
 int tuntap_open (struct tuntap_dev *device, char *dev, const char *address_mode, char *device_ip,
@@ -199,6 +210,7 @@ void tuntap_close (struct tuntap_dev *tuntap);
 void tuntap_get_address (struct tuntap_dev *tuntap);
 
 /* Utils */
+char* inaddrtoa (ipstr_t out, struct in_addr addr);
 char* intoa (uint32_t addr, char* buf, uint16_t buf_len);
 uint32_t bitlen2mask (uint8_t bitlen);
 uint8_t mask2bitlen (uint32_t mask);
@@ -279,6 +291,7 @@ int assign_one_ip_subnet (n2n_sn_t *sss, struct sn_community *comm);
 const char* compression_str (uint8_t cmpr);
 const char* transop_str (enum n2n_transform tr);
 
-void handleMgmtJson (n2n_edge_t *eee, char *udp_buf, const struct sockaddr_in sender_sock);
-void handleMgmtJson_sn (n2n_sn_t *sss, char *udp_buf, const struct sockaddr_in sender_sock);
+void readFromMgmtSocket (n2n_edge_t *eee);
+
+void mgmt_event_post (enum n2n_event_topic topic, int data0, void *data1);
 #endif /* _N2N_H_ */

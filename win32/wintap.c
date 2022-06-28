@@ -1,5 +1,5 @@
 /*
-  (C) 2007-09 - Luca Deri <deri@ntop.org>
+  (C) 2007-22 - Luca Deri <deri@ntop.org>
 */
 
 #include "n2n.h"
@@ -120,7 +120,7 @@ static int lookup_adapter_info_reg(const char *target_adapter, char *regpath, si
   long len, rc;
   char index[16];
   int err, i;
-  char adapter_name[N2N_IFNAMSIZ];
+  devstr_t adapter_name;
   int rv = 0;
 
   if((rc = RegOpenKeyEx(HKEY_LOCAL_MACHINE, ADAPTER_INFO_KEY, 0, KEY_READ, &key))) {

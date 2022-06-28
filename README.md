@@ -64,9 +64,7 @@ make
 make install
 ```
 
-Some parts of the code significantly benefit from compiler optimizations and platform features such as NEON, SSE and AVX. To enable, use `./configure CFLAGS="-O3 -march=native"` for configuration instead of `./configure`.
-
-For Windows, MacOS and general building options, please check out [Building documentation](doc/Building.md) for compilation and running.
+For Windows, MacOS, CMake, optimizations and general building options, please check out [Building documentation](doc/Building.md) for compilation and running.
 
 **IMPORTANT** It is generally recommended to use the [latest stable release](https://github.com/ntop/n2n/releases). Please note that the current _dev_ branch usually is not guaranteed to be backward compatible neither with the latest stable release nor with previous _dev_ states. On the other hand, if you dare to try bleeding edge features, you are encouraged to compile from _dev_ – just keep track of sometimes rapidly occuring changes. Feedback in the _Issues_ section is appreciated.
 
@@ -114,7 +112,8 @@ Here is a list of third-party projects connected to this repository:
 - n2n for Android: [hin2n](https://github.com/switch-iot/hin2n)
 - Docker images: [Docker Hub](https://hub.docker.com/r/supermock/supernode/)
 - Go bindings, management daemons and CLIs for n2n edges and supernodes, Docker, Kubernetes & Helm Charts: [pojntfx/gon2n](https://pojntfx.github.io/gon2n/)
+- Windows GUI (along with a custom version of n2n) but also working with regular n2n: [HappyNet](https://github.com/happynclient/happynwindows)
 
 ---
 
-(C) 2007-2021 - ntop.org and contributors
+(C) 2007-22 - ntop.org and contributors

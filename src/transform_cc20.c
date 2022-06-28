@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,11 +33,11 @@ static int transop_deinit_cc20 (n2n_trans_op_t *arg) {
 
     transop_cc20_t *priv = (transop_cc20_t *)arg->priv;
 
-    if(priv->ctx)
-        cc20_deinit(priv->ctx);
-
-    if(priv)
+    if(priv) {
+        if(priv->ctx)
+            cc20_deinit(priv->ctx);
         free(priv);
+    }
 
     return 0;
 }

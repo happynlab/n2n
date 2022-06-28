@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -166,7 +166,7 @@ static int sn_selection_criterion_sort (peer_info_t *a, peer_info_t *b) {
     if(a->selection_criterion > b->selection_criterion)
         ret = 1;
     else if(a->selection_criterion < b->selection_criterion)
-        ret = -2;
+        ret = -1;
 
     return ret;
 }
@@ -232,7 +232,8 @@ extern char * sn_selection_criterion_str (n2n_edge_t *eee, selection_criterion_s
             }
 
             case SN_SELECTION_STRATEGY_MAC: {
-                chars = snprintf(out, SN_SELECTION_CRITERION_BUF_SIZE, "%s", (int64_t)peer->selection_criterion > 0 ? "active" : "");
+                chars = snprintf(out, SN_SELECTION_CRITERION_BUF_SIZE, "%s", ((int64_t)peer->selection_criterion > 0 ?
+                                                                              ((peer == eee->curr_sn) ? "active" : "standby") : ""));
                 break;
             }
 

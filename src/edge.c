@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,7 +51,6 @@ int fetch_and_eventually_process_data (n2n_edge_t *eee, SOCKET sock,
                                        uint8_t *pktbuf, uint16_t *expected, uint16_t *position,
                                        time_t now);
 int resolve_check (n2n_resolve_parameter_t *param, uint8_t resolution_request, time_t now);
-int edge_init_routes (n2n_edge_t *eee, n2n_route_t *routes, uint16_t num_routes);
 
 /* ***************************************************** */
 
@@ -106,17 +105,14 @@ static int scan_address (char * ip_addr, size_t addr_size,
     if(!end)
         // no slash present -- default end
         end = s + strlen(s);
+    else
+	// slash is present. now, handle the sub-network address
+	sscanf(end + 1, "%u", &bitlen);
 
     strncpy(ip_addr, start, (size_t)MIN(end - start, addr_size - 1)); // ensure NULL term
 
-    if(end) {
-        // slash is present
-
-        // now, handle the sub-network address
-        sscanf(end + 1, "%u", &bitlen);
-        bitlen = htobe32(bitlen2mask(bitlen));
-        inet_ntop(AF_INET, &bitlen, netmask, netmask_size);
-    }
+    bitlen = htobe32(bitlen2mask(bitlen));
+    inet_ntop(AF_INET, &bitlen, netmask, netmask_size);
 
     return retval;
 }
@@ -180,7 +176,10 @@ static void help (int level) {
             "\n                      "
                "[-e <preferred local IP address>] [-S<level of solitude>]"
             "\n                      "
-               "[--select-rtt]"
+               "[--select-rtt] "
+#if defined(HAVE_MINIUPNP) || defined(HAVE_NATPMP)
+               "[--no-port-forwarding] "
+#endif // HAVE_MINIUPNP || HAVE_NATPMP
           "\n\n tap device and       "
                "[-a [static:|dhcp:]<tap IP address>[/<cidr suffix>]] "
             "\n overlay network      "
@@ -209,7 +208,7 @@ static void help (int level) {
                "[--management-password <pw>] "
             "\n                      "
                "[-v] "
-               "[-n <cidr:gateway>] "
+               "[-V] "
 #ifndef WIN32
             "\n                      "
                "[-u <numerical user id>] "
@@ -237,6 +236,7 @@ static void help (int level) {
           "\n                      [-f]  do not fork but run in foreground"
 #endif
           "\n                      [-v]  make more verbose, repeat as required"
+          "\n                      [-V]  make less verbose, repeat as required"
           "\n                      "
 
           "\n  -h    shows this quick reference including all available options"
@@ -287,14 +287,13 @@ static void help (int level) {
         printf(" -H                | use header encryption, supernode needs fixed community\n");
         printf(" -z1 ... -z2       | compress outgoing data packets, -z1 = lzo1x,\n"
                "                   | "
-#ifdef N2N_HAVE_ZSTD
+#ifdef HAVE_ZSTD
                                      "-z2 = zstd, "
 #endif
                                      "disabled by default\n");
         printf("--select-rtt       | supernode selection based on round trip time\n"
                "--select-mac       | supernode selection based on MAC address (default:\n"
                "                   | by load)\n");
-
         printf ("\n");
         printf (" TAP DEVICE AND OVERLAY NETWORK CONFIGURATION\n");
         printf (" --------------------------------------------\n\n");
@@ -332,8 +331,7 @@ static void help (int level) {
         printf(" --management_...  | management port password, defaults to '%s'\n"
                " ...password <pw>  | \n", N2N_MGMT_PASSWORD);
         printf(" -v                | make more verbose, repeat as required\n");
-        printf(" -n <cidr:gateway> | route an IPv4 network via the gateway, use 0.0.0.0/0 for\n"
-               "                   | the default gateway, can be set multiple times\n");
+        printf(" -V                | make less verbose, repeat as required\n");
 #ifndef WIN32
         printf(" -u <UID>          | numeric user ID to use when privileges are dropped\n");
         printf(" -g <GID>          | numeric group ID to use when privileges are dropped\n");
@@ -373,7 +371,7 @@ static void setPayloadCompression (n2n_edge_conf_t *conf, int compression) {
             conf->compression = N2N_COMPRESSION_ID_LZO;
             break;
         }
-#ifdef N2N_HAVE_ZSTD
+#ifdef HAVE_ZSTD
         case 2: {
             conf->compression = N2N_COMPRESSION_ID_ZSTD;
             break;
@@ -564,8 +562,8 @@ static int setOption (int optkey, char *optargument, n2n_tuntap_priv_config_t *e
 
 #if defined(N2N_CAN_NAME_IFACE)
         case 'd': /* TUNTAP name */ {
-            strncpy(ec->tuntap_dev_name, optargument, N2N_IFNAMSIZ);
-            ec->tuntap_dev_name[N2N_IFNAMSIZ - 1] = '\0';
+            strncpy(ec->tuntap_dev_name, optargument, sizeof(devstr_t));
+            ec->tuntap_dev_name[sizeof(devstr_t) - 1] = '\0';
             break;
         }
 #endif
@@ -676,39 +674,9 @@ static int setOption (int optkey, char *optargument, n2n_tuntap_priv_config_t *e
         }
 #endif
         case 'n': {
-            char cidr_net[64], gateway[64];
-            n2n_route_t route;
-
-            if(sscanf(optargument, "%63[^/]/%hhd:%63s", cidr_net, &route.net_bitlen, gateway) != 3) {
-                traceEvent(TRACE_WARNING, "bad cidr/gateway format '%d'", optargument);
-                return 2;
-            }
-
-            route.net_addr = inet_addr(cidr_net);
-            route.gateway = inet_addr(gateway);
-
-            if((route.net_bitlen < 0) || (route.net_bitlen > 32)) {
-                traceEvent(TRACE_WARNING, "bad prefix '%d' in '%s'", route.net_bitlen, optargument);
-                return 2;
-            }
-
-            if(route.net_addr == INADDR_NONE) {
-                traceEvent(TRACE_WARNING, "bad network '%s' in '%s'", cidr_net, optargument);
-                return 2;
-            }
-
-            if(route.gateway == INADDR_NONE) {
-                traceEvent(TRACE_WARNING, "bad gateway '%s' in '%s'", gateway, optargument);
-                return 2;
-            }
-
-            traceEvent(TRACE_NORMAL, "adding %s/%d via %s", cidr_net, route.net_bitlen, gateway);
-
-            conf->routes = realloc(conf->routes, sizeof(struct n2n_route) * (conf->num_routes + 1));
-            conf->routes[conf->num_routes] = route;
-            conf->num_routes++;
-
-            break;
+            traceEvent(TRACE_WARNING, "route support (-n) has been removed from n2n's core since version 3.1, "
+                                      "please try tools/n2n-route instead");
+            return 2;
         }
 
         case 'S': {
@@ -763,6 +731,11 @@ static int setOption (int optkey, char *optargument, n2n_tuntap_priv_config_t *e
         case 'v': /* verbose */
             setTraceLevel(getTraceLevel() + 1);
             break;
+
+        case 'V': /* less verbose */ {
+            setTraceLevel(getTraceLevel() - 1);
+            break;
+        }
 
         case 'R': /* network traffic filter */ {
             filter_rule_t *new_rule = malloc(sizeof(filter_rule_t));
@@ -819,7 +792,7 @@ static int loadFromCLI (int argc, char *argv[], n2n_edge_conf_t *conf, n2n_tunta
     u_char c;
 
     while ((c = getopt_long(argc, argv,
-                            "k:a:c:Eu:g:m:M:s:d:l:p:fvhrt:i:I:J:P:S::DL:z::A::Hn:R:e:"
+                            "k:a:c:Eu:g:m:M:s:d:l:p:fvVhrt:i:I:J:P:S::DL:z::A::Hn:R:e:"
 #ifdef __linux__
                             "T:"
 #endif
@@ -1063,7 +1036,7 @@ int main (int argc, char* argv[]) {
             conf.federation_public_key = calloc(1, sizeof(n2n_private_public_key_t));
             if(conf.federation_public_key) {
                 traceEvent(TRACE_WARNING, "using default federation public key; FOR TESTING ONLY, usage of a custom federation name and key (-P) is highly recommended!");
-                generate_private_key(*(conf.federation_public_key), FEDERATION_NAME + 1);
+                generate_private_key(*(conf.federation_public_key), &FEDERATION_NAME[1]);
                 generate_public_key(*(conf.federation_public_key), *(conf.federation_public_key));
             }
         }
@@ -1242,11 +1215,6 @@ int main (int argc, char* argv[]) {
                                      eee->tuntap_priv_conf.ip_addr,
                                      eee->tuntap_priv_conf.netmask,
                                      macaddr_str(mac_buf, eee->device.mac_addr));
-            // routes
-            if(edge_init_routes(eee, eee->conf.routes, eee->conf.num_routes) < 0) {
-                traceEvent(TRACE_ERROR, "routes setup failed");
-                exit(1);
-            }
             runlevel = 5;
             // no more answers required
             seek_answer = 0;

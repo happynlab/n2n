@@ -1,5 +1,5 @@
 /**
- * (C) 2007-21 - ntop.org and contributors
+ * (C) 2007-22 - ntop.org and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ static void help (int level) {
         printf(" general usage:  supernode <config file> (see supernode.conf)\n"
            "\n"
                "            or   supernode "
-               "[-p <local port>] "
+               "[-p [<local bind ip address>:]<local port>] "
             "\n                           "
                "[-F <federation name>] "
             "\n options for under-        "
@@ -113,7 +113,8 @@ static void help (int level) {
         );
         printf (" OPTIONS FOR THE UNDERLYING NETWORK CONNECTION\n");
         printf (" ---------------------------------------------\n\n");
-        printf(" -p <local port>   | fixed local UDP port, defaults to %u\n", N2N_SN_LPORT_DEFAULT);
+        printf(" -p [<ip>:]<port>  | fixed local UDP port (defaults to %u) and optionally\n"
+               "                   | bind to sepcified local IP address only ('any' by default)\n", N2N_SN_LPORT_DEFAULT);
         printf(" -F <fed name>     | name of the supernode's federation, defaults to\n"
                "                   | '%s'\n", (char *)FEDERATION_NAME);
         printf(" -l <host:port>    | ip address or name, and port of known supernode\n");
@@ -167,14 +168,39 @@ static int setOption (int optkey, char *_optarg, n2n_sn_t *sss) {
     //traceEvent(TRACE_NORMAL, "Option %c = %s", optkey, _optarg ? _optarg : "");
 
     switch(optkey) {
-        case 'p': /* local-port */
-            sss->lport = atoi(_optarg);
+        case 'p': { /* local-port */
+            char* colon = strpbrk(_optarg, ":");
+            if(colon) { /*ip address:port */
+                *colon = 0;
+                sss->bind_address = ntohl(inet_addr(_optarg));
+                sss->lport = atoi(++colon);
 
-            if(sss->lport == 0)
-                traceEvent(TRACE_WARNING, "bad local port format, defaulting to %u", N2N_SN_LPORT_DEFAULT);
-                // default is made sure in sn_init()
-
+                if(sss->bind_address == INADDR_NONE) {
+                    traceEvent(TRACE_WARNING, "bad address to bind to, binding to any IP address");
+                    sss->bind_address = INADDR_ANY;
+                }
+                if(sss->lport == 0) {
+                    traceEvent(TRACE_WARNING, "bad local port format, defaulting to %u", N2N_SN_LPORT_DEFAULT);
+                    sss->lport = N2N_SN_LPORT_DEFAULT;
+                }
+            } else { /* ip address or port only */
+                char* dot = strpbrk(_optarg, ".");
+                if(dot) { /* ip address only */
+                    sss->bind_address = ntohl(inet_addr(_optarg));
+                    if(sss->bind_address == INADDR_NONE) {
+                        traceEvent(TRACE_WARNING, "bad address to bind to, binding to any IP address");
+                        sss->bind_address = INADDR_ANY;
+                    }
+                } else { /* port only */
+                    sss->lport = atoi(_optarg);
+                    if(sss->lport == 0) {
+                        traceEvent(TRACE_WARNING, "bad local port format, defaulting to %u", N2N_SN_LPORT_DEFAULT);
+                        sss->lport = N2N_SN_LPORT_DEFAULT;
+                    }
+                }
+            }
             break;
+        }
 
         case 't': /* mgmt-port */
             sss->mport = atoi(_optarg);
@@ -223,7 +249,7 @@ static int setOption (int optkey, char *_optarg, n2n_sn_t *sss) {
                         strncpy(anchor_sn->ip_addr, _optarg, N2N_EDGE_SN_HOST_SIZE - 1);
 	                memcpy(&(anchor_sn->sock), socket, sizeof(n2n_sock_t));
                         memcpy(anchor_sn->mac_addr, null_mac, sizeof(n2n_mac_t));
-                        anchor_sn->purgeable = SN_UNPURGEABLE;
+                        anchor_sn->purgeable = UNPURGEABLE;
                         anchor_sn->last_valid_time_stamp = initial_time_stamp();
                     }
                 }
@@ -286,11 +312,18 @@ static int setOption (int optkey, char *_optarg, n2n_sn_t *sss) {
         case 'F': { /* federation name */
             snprintf(sss->federation->community, N2N_COMMUNITY_SIZE - 1 ,"*%s", _optarg);
             sss->federation->community[N2N_COMMUNITY_SIZE - 1] = '\0';
+            sss->federation->purgeable = UNPURGEABLE;
             break;
         }
 #ifdef SN_MANUAL_MAC
         case 'm': {/* MAC address */
-            str2mac(sss->mac_addr,_optarg);
+            str2mac(sss->mac_addr, _optarg);
+
+            // clear multicast bit
+            sss->mac_addr[0] &= ~0x01;
+            // set locally-assigned bit
+            sss->mac_addr[0] |= 0x02;
+
             break;
         }
 #endif
@@ -596,7 +629,7 @@ int main (int argc, char * const argv[]) {
 
     traceEvent(TRACE_DEBUG, "traceLevel is %d", getTraceLevel());
 
-    sss_node.sock = open_socket(sss_node.lport, INADDR_ANY, 0 /* UDP */);
+    sss_node.sock = open_socket(sss_node.lport, sss_node.bind_address, 0 /* UDP */);
     if(-1 == sss_node.sock) {
         traceEvent(TRACE_ERROR, "failed to open main socket. %s", strerror(errno));
         exit(-2);
@@ -605,7 +638,7 @@ int main (int argc, char * const argv[]) {
     }
 
 #ifdef N2N_HAVE_TCP
-    sss_node.tcp_sock = open_socket(sss_node.lport, INADDR_ANY, 1 /* TCP */);
+    sss_node.tcp_sock = open_socket(sss_node.lport, sss_node.bind_address, 1 /* TCP */);
     if(-1 == sss_node.tcp_sock) {
         traceEvent(TRACE_ERROR, "failed to open auxiliary TCP socket, %s", strerror(errno));
         exit(-2);
@@ -633,10 +666,24 @@ int main (int argc, char * const argv[]) {
         scan->socket_fd = sss_node.sock;
 
 #ifndef WIN32
+    /*
+     * If no uid/gid is specified on the commandline, use the uid/gid of the
+     * first found out of user "n2n" or "nobody"
+     */
     if(((pw = getpwnam ("n2n")) != NULL) || ((pw = getpwnam ("nobody")) != NULL)) {
+        /*
+         * If the uid/gid is not set from the CLI, set it from getpwnam
+         * otherwise reset it to zero
+         * (TODO: this looks wrong)
+         */
         sss_node.userid = sss_node.userid == 0 ? pw->pw_uid : 0;
         sss_node.groupid = sss_node.groupid == 0 ? pw->pw_gid : 0;
     }
+
+    /*
+     * If we have a non-zero requested uid/gid, attempt to switch to use
+     * those
+     */
     if((sss_node.userid != 0) || (sss_node.groupid != 0)) {
         traceEvent(TRACE_NORMAL, "dropping privileges to uid=%d, gid=%d",
 	                 (signed int)sss_node.userid, (signed int)sss_node.groupid);
@@ -645,7 +692,6 @@ int main (int argc, char * const argv[]) {
         if((setgid(sss_node.groupid) != 0)
            || (setuid(sss_node.userid) != 0)) {
             traceEvent(TRACE_ERROR, "unable to drop privileges [%u/%s]", errno, strerror(errno));
-            exit(1);
         }
     }
 
