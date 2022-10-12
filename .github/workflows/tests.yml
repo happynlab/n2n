@@ -6,6 +6,8 @@ on:
   push:
   pull_request:
 
+  workflow_dispatch:
+
 jobs:
   smoketest:
     name: Smoke test
